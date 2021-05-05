@@ -10,15 +10,11 @@
             "email": "evgeny.e.borisov@gmail.com"
         }
     ],
-    "require": {
-        "php": ">=7.2.0"
-    },
-    "require-dev": {
-
-    },
     "extra": {
         "laravel": {
-            "providers": [],
+            "providers": [
+                "Modules\\Office\\Providers\\OfficeServiceProvider"
+            ],
             "aliases": {
 
             }

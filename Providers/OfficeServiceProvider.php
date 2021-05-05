@@ -1,11 +1,11 @@
 <?php
 
-namespace Modules\Onlyoffice\Providers;
+namespace Modules\Office\Providers;
 
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Database\Eloquent\Factory;
 
-class OnlyofficeServiceProvider extends ServiceProvider
+class OfficeServiceProvider extends ServiceProvider
 {
     /**
      * @var string $moduleName
@@ -29,6 +29,7 @@ class OnlyofficeServiceProvider extends ServiceProvider
         $this->registerViews();
         $this->loadMigrationsFrom(module_path($this->moduleName, 'Database/Migrations'));
         $this->registerAssets();
+        $this->registerDirectory();
     }
 
     /**
@@ -116,6 +117,22 @@ class OnlyofficeServiceProvider extends ServiceProvider
         $this->publishes([
             module_path($this->moduleName, 'Resources/assets') => public_path('modules/' . $this->moduleNameLower),
         ], 'public');
+    }
+
+    protected function registerDirectory() {
+        $storeDir = storage_path('app/public/docs/app_data');
+        if (!file_exists($storeDir)) {
+            mkdir($storeDir, 0777, true);
+        }
+        $files = ['new.docx', 'demo.docx', 'new.xlsx', 'demo.xlsx', 'new.pptx', 'demo.pptx'];
+        foreach ($files as $file) {
+            $demoFilename = $this->functions->GetCorrectName($file);
+            if (!@copy(module_path($this->moduleName, 'Resources/files/' . $file), $this->functions->getStoragePath($demoFilename))) {
+                //sendlog("Copy file error to ". $this->functions->getStoragePath($demoFilename), "common.log");
+                //Copy error!!!
+                \Log::error("Copy file error to " . $this->functions->getStoragePath($demoFilename));
+            }
+        }
     }
 
 }

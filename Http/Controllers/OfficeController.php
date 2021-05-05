@@ -43,6 +43,11 @@ class OfficeController extends Controller
         return view('Office::index', compact('currentUser', 'config', 'storedFiles'));
     }
 
+    public function getfiles() {
+        $storedFiles = $this->functions->getStoredFiles();
+        return response()->json($storedFiles);
+    }
+
 
     public function editor(Request $request)
     {
