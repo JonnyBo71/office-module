@@ -126,11 +126,10 @@ class OfficeServiceProvider extends ServiceProvider
         }
         $files = ['new.docx', 'demo.docx', 'new.xlsx', 'demo.xlsx', 'new.pptx', 'demo.pptx'];
         foreach ($files as $file) {
-            $demoFilename = $this->functions->GetCorrectName($file);
-            if (!@copy(module_path($this->moduleName, 'Resources/files/' . $file), $this->functions->getStoragePath($demoFilename))) {
+            if (!@copy(module_path($this->moduleName, 'Resources/files/' . $file), $storeDir . DIRECTORY_SEPARATOR . $file)) {
                 //sendlog("Copy file error to ". $this->functions->getStoragePath($demoFilename), "common.log");
                 //Copy error!!!
-                \Log::error("Copy file error to " . $this->functions->getStoragePath($demoFilename));
+                \Log::error("Copy file error to " . $storeDir . DIRECTORY_SEPARATOR . $file);
             }
         }
     }
