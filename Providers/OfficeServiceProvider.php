@@ -10,12 +10,12 @@ class OfficeServiceProvider extends ServiceProvider
     /**
      * @var string $moduleName
      */
-    protected $moduleName = 'Onlyoffice';
+    protected $moduleName = 'Office';
 
     /**
      * @var string $moduleNameLower
      */
-    protected $moduleNameLower = 'onlyoffice';
+    protected $moduleNameLower = 'office';
 
     /**
      * Boot the application events.
