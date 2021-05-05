@@ -23,7 +23,7 @@
                 <div class="clearFix">
                     <div class="upload-panel clearFix">
                         <a class="file-upload">Загрузите файл
-                            <input type="file" id="fileupload" name="files" data-url="/plugins/onlyoffice/webeditor?type=upload" />
+                            <input type="file" id="fileupload" name="files" data-url="/plugins/office/webeditor?type=upload" />
                         </a>
                         <br />
                         <label class="save-original">
@@ -33,13 +33,13 @@
                     <div class="create-panel clearFix">
                         <ul class="try-editor-list clearFix">
                             <li>
-                                <a class="try-editor document reload-page" target="_blank" href="/plugins/onlyoffice/editor/?fileExt=docx&user=<?php echo $currentUser->id; ?>">Создать документ</a>
+                                <a class="try-editor document reload-page" target="_blank" href="/plugins/office/editor/?fileExt=docx&user=<?php echo $currentUser->id; ?>">Создать документ</a>
                             </li>
                             <li>
-                                <a class="try-editor spreadsheet reload-page" target="_blank" href="/plugins/onlyoffice/editor/?fileExt=xlsx&user=<?php echo $currentUser->id; ?>">Создать таблицу</a>
+                                <a class="try-editor spreadsheet reload-page" target="_blank" href="/plugins/office/editor/?fileExt=xlsx&user=<?php echo $currentUser->id; ?>">Создать таблицу</a>
                             </li>
                             <li>
-                                <a class="try-editor presentation reload-page" target="_blank" href="/plugins/onlyoffice/editor/?fileExt=pptx&user=<?php echo $currentUser->id; ?>">Создать презентацию</a>
+                                <a class="try-editor presentation reload-page" target="_blank" href="/plugins/office/editor/?fileExt=pptx&user=<?php echo $currentUser->id; ?>">Создать презентацию</a>
                             </li>
                         </ul>
                         <label class="create-sample">

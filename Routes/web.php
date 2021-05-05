@@ -12,7 +12,6 @@
 */
 if (Module::isEnabled('Office')) {
     Route::prefix('plugins/office')->group(function() {
-    //Route::prefix('onlyoffice')->group(function () {
         Route::get('/', 'OfficeController@index');
         Route::get('/getfiles', 'OfficeController@getfiles');
         Route::get('/editor', 'OfficeController@editor');

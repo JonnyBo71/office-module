@@ -1,11 +1,11 @@
 <?php
 
-namespace Modules\Onlyoffice\Database\Seeders;
+namespace Modules\Office\Database\Seeders;
 
 use Illuminate\Database\Seeder;
 use Illuminate\Database\Eloquent\Model;
 
-class OnlyofficeDatabaseSeeder extends Seeder
+class OfficeDatabaseSeeder extends Seeder
 {
     /**
      * Run the database seeds.
