@@ -1,0 +1,32 @@
+{
+    "name": "altrpjb/office-module",
+    "type": "laravel-module",
+    "description": "Plugin office",
+    "license": "MIT",
+    "minimum-stability": "dev",
+    "authors": [
+        {
+            "name": "JonnyBo71",
+            "email": "evgeny.e.borisov@gmail.com"
+        }
+    ],
+    "require": {
+        "php": ">=7.2.0"
+    },
+    "require-dev": {
+
+    },
+    "extra": {
+        "laravel": {
+            "providers": [],
+            "aliases": {
+
+            }
+        }
+    },
+    "autoload": {
+        "psr-4": {
+            "Modules\\Office\\": ""
+        }
+    }
+}

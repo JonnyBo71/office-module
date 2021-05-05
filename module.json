@@ -1,0 +1,14 @@
+{
+    "name": "Office",
+    "alias": "office",
+    "image": "/modules/office/img/office-logo.png",
+    "description": "",
+    "keywords": [],
+    "priority": 0,
+    "providers": [
+        "Modules\\Onlyoffice\\Providers\\OnlyofficeServiceProvider"
+    ],
+    "aliases": {},
+    "files": [],
+    "requires": []
+}
