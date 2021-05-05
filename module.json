@@ -6,7 +6,7 @@
     "keywords": [],
     "priority": 0,
     "providers": [
-        "Modules\\Onlyoffice\\Providers\\OnlyofficeServiceProvider"
+        "Modules\\Office\\Providers\\OfficeServiceProvider"
     ],
     "aliases": {},
     "files": [],
