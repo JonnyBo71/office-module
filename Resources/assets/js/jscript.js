@@ -40,6 +40,9 @@ if (typeof jQuery != "undefined") {
     jq(function () {
         jq('#fileupload').fileupload({
             dataType: 'json',
+            headers: {
+                'X-CSRF-TOKEN': jq('meta[name="csrf-token"]').attr('content')
+            },
             add: function (e, data) {
                 jq(".error").removeClass("error");
                 jq(".done").removeClass("done");
