@@ -469,7 +469,7 @@ class OfficeFunctions
 
         for ($i = 1; file_exists($this->getStoragePath($name)); $i++)
         {
-            $name = $baseNameWithoutExt . " (" . $i . ")." . $ext;
+            $name = $baseNameWithoutExt . "(" . $i . ")." . $ext;
         }
         return $name;
     }
