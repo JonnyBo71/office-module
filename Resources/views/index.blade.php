@@ -27,7 +27,7 @@
                         </a>
                         <br />
                         <label class="save-original">
-                            <input type="checkbox" id="checkOriginalFormat" class="checkbox" />Выберите формат файла
+                            <input type="checkbox" id="checkOriginalFormat" class="checkbox" /> Выберите формат файла
                         </label>
                     </div>
                     <div class="create-panel clearFix">
