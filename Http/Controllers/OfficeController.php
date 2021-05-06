@@ -40,7 +40,7 @@ class OfficeController extends Controller
             return redirect('/login');
         $config = $this->config;
         $storedFiles = $this->functions->getStoredFiles();
-        return view('Office::index', compact('currentUser', 'config', 'storedFiles'));
+        return view('office::index', compact('currentUser', 'config', 'storedFiles'));
     }
 
     public function getfiles() {
@@ -149,7 +149,7 @@ class OfficeController extends Controller
 
         $config = $this->config;
 
-        return view('Office::editor', compact('currentUser', 'config', 'fileInfo', 'option', 'out'));
+        return view('office::editor', compact('currentUser', 'config', 'fileInfo', 'option', 'out'));
     }
 
     public function webeditor(Request $request) {
