@@ -276,6 +276,7 @@ class OfficeFunctions
 
 
     public function getClientIp() {
+        /*
         $ipaddress =
             getenv('HTTP_CLIENT_IP')?:
                 getenv('HTTP_X_FORWARDED_FOR')?:
@@ -288,6 +289,8 @@ class OfficeFunctions
         $ipaddress = preg_replace("/[^0-9a-zA-Z.=]/", "_", $ipaddress);
 
         return $ipaddress;
+        */
+        return Auth::user()->id;
     }
 
     public function serverPath($forDocumentServer = NULL) {

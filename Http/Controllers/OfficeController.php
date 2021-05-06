@@ -221,7 +221,7 @@ class OfficeController extends Controller
     }
 
     protected function getCallbackUrl($fileName) {
-        return $this->functions->serverPath(TRUE) . '/'
+        return $this->functions->serverPath(TRUE)
             . "/plugins/office/webeditor/"
             . "?type=track"
             . "&fileName=" . urlencode($fileName)
