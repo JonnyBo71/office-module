@@ -311,7 +311,7 @@ footer {
 }
 .stored-edit span {
     font-size: 12px;
-    line-height: 12px;
+    line-height: 2px;
     vertical-align: top;
 }
 .stored-edit:hover span {
