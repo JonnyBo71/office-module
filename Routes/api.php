@@ -16,3 +16,8 @@ use Illuminate\Http\Request;
 Route::middleware('auth:api')->get('/office', function (Request $request) {
     return $request->user();
 });
+
+Route::prefix('plugins/office')->group(function() {
+    Route::get('/webeditor', 'OfficeController@webeditor');
+    Route::post('/webeditor', 'OfficeController@webeditor');
+});

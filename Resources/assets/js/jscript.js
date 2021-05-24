@@ -39,10 +39,10 @@ if (typeof jQuery != "undefined") {
 
     jq(function () {
         jq('#fileupload').fileupload({
+          headers: {
+            'X-CSRF-TOKEN': jq('meta[name="csrf-token"]').attr('content')
+          },
             dataType: 'json',
-            headers: {
-                'X-CSRF-TOKEN': jq('meta[name="csrf-token"]').attr('content')
-            },
             add: function (e, data) {
                 jq(".error").removeClass("error");
                 jq(".done").removeClass("done");
@@ -92,7 +92,7 @@ if (typeof jQuery != "undefined") {
         if (timer != null) {
             clearTimeout(timer);
         }
-        
+
         if (!jq("#mainProgress").is(":visible")) {
             return;
         }
@@ -112,7 +112,7 @@ if (typeof jQuery != "undefined") {
         }
 
         timer = setTimeout(function () {
-            var requestAddress = "webeditor-ajax.php"
+            var requestAddress = "/api/plugins/office/webeditor/"
                 + "?type=convert"
                 + "&filename=" + encodeURIComponent(jq("#hiddenFileName").val())
                 + "&fileUri=" + encodeURIComponent(fileUri || "");
@@ -207,7 +207,7 @@ if (typeof jQuery != "undefined") {
 
     jq(document).on("click", "#beginEdit:not(.disable)", function () {
         var fileId = encodeURIComponent(jq('#hiddenFileName').val());
-        var url = "doceditor.php?fileID=" + fileId + "&user=" + user;
+        var url = "/plugins/office/editor/?fileID=" + fileId + "&user=" + user;
         window.open(url, "_blank");
         jq('#hiddenFileName').val("");
         jq.unblockUI();
@@ -216,7 +216,7 @@ if (typeof jQuery != "undefined") {
 
     jq(document).on("click", "#beginView:not(.disable)", function () {
         var fileId = encodeURIComponent(jq('#hiddenFileName').val());
-        var url = "doceditor.php?action=view&fileID=" + fileId + "&user=" + user;
+        var url = "/plugins/office/editor/?action=view&fileID=" + fileId + "&user=" + user;
         window.open(url, "_blank");
         jq('#hiddenFileName').val("");
         jq.unblockUI();
@@ -225,7 +225,7 @@ if (typeof jQuery != "undefined") {
 
     jq(document).on("click", "#beginEmbedded:not(.disable)", function () {
         var fileId = encodeURIComponent(jq('#hiddenFileName').val());
-        var url = "doceditor.php?type=embedded&fileID=" + fileId + "&user=" + user;
+        var url = "/plugins/office/editor/?type=embedded&fileID=" + fileId + "&user=" + user;
 
         jq("#mainProgress").addClass("embedded");
         jq("#beginEmbedded").addClass("disable");
@@ -254,7 +254,7 @@ if (typeof jQuery != "undefined") {
     jq(document).on("click", ".delete-file", function () {
         var fileName = jq(this).attr("data");
 
-        var requestAddress = "webeditor-ajax.php?type=delete&fileName=" + fileName;
+        var requestAddress = "/plugins/office/webeditor/?type=delete&fileName=" + fileName;
 
         jq.ajax({
             async: true,

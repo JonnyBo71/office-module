@@ -1,11 +1,8 @@
 @extends('office::layouts.app')
 
 @section('content')
-    <form id="form1">
-        <div id="iframeEditor">
-        </div>
-    </form>
-    <script type="text/javascript" src="<?php echo $config["DOC_SERV_API_URL"] ?>"></script>
+
+    <script type="text/javascript" src="<?php echo $config["DOC_SERV_SITE_URL"].$config["DOC_SERV_API_URL"] ?>"></script>
 
     <script type="text/javascript">
 
@@ -62,15 +59,40 @@
             docEditor.setActionLink(replaceActionLink(location.href, linkParam));
         };
 
+        var onRequestRename = function(event) {
+            var title = event.data;
+
+        };
+
+        var onMetaChange = function (event) {
+            var favorite = !!event.data.favorite;
+            var title = document.title.replace(/^\☆/g, "");
+            document.title = (favorite ? "☆" : "") + title;
+            docEditor.setFavorite(favorite);
+        };
+
+        var onRequestInsertImage = function(event) {
+            docEditor.insertImage({
+                "c": event.data.c,
+                <?php echo mb_strimwidth(json_encode($dataInsertImage), 1, strlen(json_encode($dataInsertImage)) - 2)?>
+            })
+        };
+
+        var onRequestCompareFile = function() {
+            docEditor.setRevisedFile(<?php echo json_encode($dataCompareFile)?>);
+        };
+
+        var onRequestMailMergeRecipients = function (event) {
+            docEditor.setMailMergeRecipients(<?php echo json_encode($dataMailMergeRecipients) ?>);
+        };
+
         var сonnectEditor = function () {
 
-            <?php
-            /*
-            if (!file_exists(getStoragePath($filename))) {
-                echo "alert('Файл не найден'); return;";
-            }
-            */
-            ?>
+          <?php
+          if (!file_exists($fileInfo['filePath'])) {
+            echo "alert('File not found'); return;";
+          }
+          ?>
 
             var config = <?php echo json_encode($option) ?>;
 
@@ -84,6 +106,11 @@
                 'onError': onError,
                 'onOutdatedVersion': onOutdatedVersion,
                 'onMakeActionLink': onMakeActionLink,
+                "onRequestRename": onRequestRename,
+                'onMetaChange': onMetaChange,
+                'onRequestInsertImage': onRequestInsertImage,
+                'onRequestCompareFile': onRequestCompareFile,
+                'onRequestMailMergeRecipients': onRequestMailMergeRecipients,
             };
 
             <?php if ($out && ($out[0] != null && $out[1] != null)): ?>
@@ -94,7 +121,7 @@
             config.events['onRequestHistoryData'] = function (event) {
                 var ver = event.data;
                 var histData = <?php echo json_encode($out[1]) ?>;
-                docEditor.setHistoryData(histData[ver]);
+                docEditor.setHistoryData(histData[ver - 1]);
             };
             config.events['onRequestHistoryClose'] = function () {
                 document.location.reload();
@@ -112,5 +139,10 @@
         }
 
     </script>
+
+    <form id="form1">
+        <div id="iframeEditor">
+        </div>
+    </form>
 
 @endsection

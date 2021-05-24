@@ -27,7 +27,7 @@ class EditorAjax
     }
 
     public function upload(Request $request) {
-        $result; $filename;
+        //$result; $filename;
 
         //$file = json_decode($request->post());
         //$file = $request->all();
@@ -75,6 +75,7 @@ class EditorAjax
         }
 
         $result["filename"] = $filename;
+        $result["documentType"] = $this->functions->getDocumentType($filename);
         return $result;
     }
 
@@ -82,120 +83,55 @@ class EditorAjax
         //sendlog("Track START", "webedior-ajax.log");
         //sendlog("_GET params: " . serialize( $_GET ), "webedior-ajax.log");
 
+        $_trackerStatus = array(
+            0 => 'NotFound',
+            1 => 'Editing',
+            2 => 'MustSave',
+            3 => 'Corrupted',
+            4 => 'Closed',
+            6 => 'MustForceSave',
+            7 => 'CorruptedForceSave'
+        );
+
         $param = $request->all();
 
-        \Log::info("Track START");
-        \Log::info("_GET params: " . serialize( $param ));
+        //print_r($param);
 
-        global $_trackerStatus;
-        $data;
+        \Log::info("Track START");
+        \Log::info("_GET params: " . print_r( $param, true ));
+
+        //global $_trackerStatus;
+        //$data;
         $result["error"] = 0;
 
-        if (($body_stream = file_get_contents('php://input'))===FALSE) {
-            $result["error"] = "Bad Request";
-            return $result;
-        }
-
-        $data = json_decode($body_stream, TRUE); //json_decode - PHP 5 >= 5.2.0
-
-        if ($data === NULL) {
-            $result["error"] = "Bad Response";
-            return $result;
-        }
-
-        //sendlog("InputStream data: " . serialize($data), "webedior-ajax.log");
-        \Log::info("InputStream data: " . serialize($data));
-
-        if ($this->jwt->isJwtEnabled()) {
-            //sendlog("jwt enabled, checking tokens", "webedior-ajax.log");
-            \Log::info("jwt enabled, checking tokens");
-
-            $inHeader = false;
-            $token = "";
-            if (!empty($data["token"])) {
-                $token = $this->jwt->jwtDecode($data["token"]);
-            } elseif (!empty($_SERVER['HTTP_AUTHORIZATION'])) {
-                $token = $this->jwt->jwtDecode(substr($_SERVER['HTTP_AUTHORIZATION'], strlen("Bearer ")));
-                $inHeader = true;
-            } else {
-                //sendlog("jwt token wasn't found in body or headers", "webedior-ajax.log");
-                \Log::error("jwt token wasn't found in body or headers");
-                $result["error"] = "Expected JWT";
-                return $result;
-            }
-            if (empty($token)) {
-                //sendlog("token was found but signature is invalid", "webedior-ajax.log");
-                \Log::error("token was found but signature is invalid");
-                $result["error"] = "Invalid JWT signature";
-                return $result;
-            }
-
-            $data = json_decode($token, true);
-            if ($inHeader) $data = $data["payload"];
+        $data = $this->readBody();
+        \Log::info("_GET data: " . print_r( $data, true ));
+        if (isset($data["error"])){
+            return $data;
         }
 
         $status = $_trackerStatus[$data["status"]];
 
+        $userAddress = $_GET["userAddress"];
+        $fileName = basename($_GET["fileName"]);
+
         switch ($status) {
+            case "Editing":
+                if ($data["actions"] && $data["actions"][0]["type"] == 0) {
+                    $user = $data["actions"][0]["userid"];
+                    if (array_search($user, $data["users"]) === FALSE) {
+                        $commandRequest = $this->functions->commandRequest("forcesave", $data["key"]);
+                        \Log::info("   CommandRequest forcesave: " . serialize($commandRequest));
+                    }
+                }
+                break;
             case "MustSave":
             case "Corrupted":
-                if (isset($param['userAddress']) && $param["userAddress"])
-                    $userAddress = $param["userAddress"];
-                if (isset($param['fileName']) && $param["fileName"])
-                    $fileName = $param["fileName"];
-
-                $downloadUri = $data["url"];
-
-                $curExt = strtolower('.' . pathinfo($fileName, PATHINFO_EXTENSION));
-                $downloadExt = strtolower('.' . pathinfo($downloadUri, PATHINFO_EXTENSION));
-
-                if ($downloadExt != $curExt) {
-                    $key = $this->functions->getDocEditorKey(downloadUri);
-
-                    try {
-                        //sendlog("Convert " . $downloadUri . " from " . $downloadExt . " to " . $curExt, "webedior-ajax.log");
-                        \Log::info("Convert " . $downloadUri . " from " . $downloadExt . " to " . $curExt);
-                        $convertedUri;
-                        $percent = $this->functions->GetConvertedUri($downloadUri, $downloadExt, $curExt, $key, FALSE, $convertedUri);
-                        $downloadUri = $convertedUri;
-                    } catch (Exception $e) {
-                        //sendlog("Convert after save ".$e->getMessage(), "webedior-ajax.log");
-                        \Log::error("Convert after save ".$e->getMessage());
-                        $result["error"] = "error: " . $e->getMessage();
-                        return $result;
-                    }
-                }
-
-                $saved = 1;
-
-                if (($new_data = file_get_contents($downloadUri)) === FALSE) {
-                    $saved = 0;
-                } else {
-                    $storagePath = $this->functions->getStoragePath($fileName, $userAddress);
-                    $histDir = $this->functions->getHistoryDir($storagePath);
-                    $verDir = $this->functions->getVersionDir($histDir, $this->functions->getFileVersion($histDir) + 1);
-
-                    mkdir($verDir);
-
-                    copy($storagePath, $verDir . DIRECTORY_SEPARATOR . "prev" . $downloadExt);
-                    file_put_contents($storagePath, $new_data, LOCK_EX);
-
-                    if ($changesData = file_get_contents($data["changesurl"])) {
-                        file_put_contents($verDir . DIRECTORY_SEPARATOR . "diff.zip", $changesData, LOCK_EX);
-                    }
-
-                    $histData = $data["changeshistory"];
-                    if (empty($histData)) {
-                        $histData = json_encode($data["history"], JSON_PRETTY_PRINT);
-                    }
-                    if (!empty($histData)) {
-                        file_put_contents($verDir . DIRECTORY_SEPARATOR . "changes.json", $histData, LOCK_EX);
-                    }
-                    file_put_contents($verDir . DIRECTORY_SEPARATOR . "key.txt", $data["key"], LOCK_EX);
-                }
-
-                $result["c"] = "saved";
-                $result["status"] = $saved;
+                $result = $this->processSave($data, $fileName, $userAddress);
+                break;
+            case "MustForceSave":
+            case "CorruptedForceSave":
+                $result = $this->processForceSave($data, $fileName, $userAddress);
                 break;
         }
 
@@ -206,12 +142,16 @@ class EditorAjax
 
     public function convert(Request $request) {
         $param = $request->all();
+
         if (isset($param['filename']) && $param["filename"])
-            $fileName = $param["filename"];
+            $fileName = basename($param["filename"]);
+        if (isset($param['filePass']) && $param["filePass"])
+            $filePass = $param["filePass"];
+
         $extension = strtolower(pathinfo($fileName, PATHINFO_EXTENSION));
         $internalExtension = trim($this->functions->getInternalExtension($fileName),'.');
 
-        if (in_array("." + $extension, $GLOBALS['DOC_SERV_CONVERT']) && $internalExtension != "") {
+        if (in_array("." . $extension, $GLOBALS['DOC_SERV_CONVERT']) && $internalExtension != "") {
             if (isset($param['fileUri']) && $param["fileUri"])
                 $fileUri = $param["fileUri"];
             if ($fileUri == NULL || $fileUri == "") {
@@ -265,12 +205,11 @@ class EditorAjax
     public function delete(Request $request) {
         try {
             $param = $request->all();
-
             if (isset($param['fileName']) && $param["fileName"])
-                $fileName = $param['fileName'];
+                $fileName = basename($param['fileName']);
 
             $filePath = $this->functions->getStoragePath($fileName);
-
+            echo $filePath;
             unlink($filePath);
             $this->delTree($this->functions->getHistoryDir($filePath));
         }
@@ -279,6 +218,69 @@ class EditorAjax
             \Log::error("Deletion ".$e->getMessage());
             $result["error"] = "error: " . $e->getMessage();
             return $result;
+        }
+    }
+
+    public function files() {
+        try {
+            @header( "Content-Type", "application/json" );
+
+            $fileId = $_GET["fileId"];
+            $result = $this->functions->getFileInfo($fileId);
+
+            return $result;
+        }
+        catch (Exception $e) {
+            \Log::error("Files ".$e->getMessage());
+            $result["error"] = "error: " . $e->getMessage();
+            return $result;
+        }
+    }
+
+    public function assets() {
+        $fileName = basename($_GET["name"]);
+        $filePath = storage_path('app/public/docs') . DIRECTORY_SEPARATOR . "app_data" . DIRECTORY_SEPARATOR . $fileName;
+        $this->downloadFile($filePath);
+    }
+
+    public function csv() {
+        $fileName =  "csv.csv";
+        $filePath = storage_path('app/public/docs') . DIRECTORY_SEPARATOR . "app_data" . DIRECTORY_SEPARATOR . $fileName;
+        $this->downloadFile($filePath);
+    }
+
+    public function download() {
+        try {
+            $fileName = basename($_GET["name"]);
+            $filePath = $this->functions->getForcesavePath($fileName, null, false);
+            if ($filePath == "") {
+                $filePath = $this->functions->getStoragePath($fileName, null);
+            }
+            $this->downloadFile($filePath);
+        } catch (Exception $e) {
+            \Log::error("Download ".$e->getMessage());
+            $result["error"] = "error: File not found";
+            return $result;
+        }
+    }
+
+    public function downloadFile($filePath) {
+        if (file_exists($filePath)) {
+            if (ob_get_level()) {
+                ob_end_clean();
+            }
+
+            @header('Content-Length: ' . filesize($filePath));
+            @header('Content-Disposition: attachment; filename*=UTF-8\'\'' . urldecode(basename($filePath)));
+            @header('Content-Type: ' . mime_content_type($filePath));
+
+            if ($fd = fopen($filePath, 'rb')) {
+                while (!feof($fd)) {
+                    print fread($fd, 1024);
+                }
+                fclose($fd);
+            }
+            exit;
         }
     }
 
@@ -291,4 +293,192 @@ class EditorAjax
         }
         return rmdir($dir);
     }
+
+    public function readBody() {
+        $result["error"] = 0;
+
+        if (($body_stream = file_get_contents('php://input')) === FALSE) {
+            $result["error"] = "Bad Request";
+            return $result;
+        }
+
+        $data = json_decode($body_stream, TRUE); //json_decode - PHP 5 >= 5.2.0
+
+        if ($data === NULL) {
+            $result["error"] = "Bad Response";
+            return $result;
+        }
+
+        \Log::info("   InputStream data: " . serialize($data));
+
+        if ($this->jwt->isJwtEnabled()) {
+            \Log::info("   jwt enabled, checking tokens");
+
+            $inHeader = false;
+            $token = "";
+            $jwtHeader = $GLOBALS['DOC_SERV_JWT_HEADER'] == "" ? "Authorization" : $GLOBALS['DOC_SERV_JWT_HEADER'];
+
+            if (!empty($data["token"])) {
+                $token = $this->jwt->jwtDecode($data["token"]);
+            } elseif (!empty(apache_request_headers()[$jwtHeader])) {
+                $token = $this->jwt->jwtDecode(substr(apache_request_headers()[$jwtHeader], strlen("Bearer ")));
+                $inHeader = true;
+            } else {
+                \Log::error("   jwt token wasn't found in body or headers");
+                $result["error"] = "Expected JWT";
+                return $result;
+            }
+            if (empty($token)) {
+                \Log::error("   token was found but signature is invalid");
+                $result["error"] = "Invalid JWT signature";
+                return $result;
+            }
+
+            $data = json_decode($token, true);
+            if ($inHeader) $data = $data["payload"];
+        }
+
+        return $data;
+    }
+
+    public function processSave($data, $fileName, $userAddress) {
+        $downloadUri = $data["url"];
+
+        \Log::info("   Parametr:  " . print_r($data, true));
+
+        $curExt = strtolower('.' . pathinfo($fileName, PATHINFO_EXTENSION));
+        $downloadExt = strtolower('.' . pathinfo($downloadUri, PATHINFO_EXTENSION));
+        $newFileName = $fileName;
+
+        if ($downloadExt != $curExt) {
+            $key = $this->functions->GenerateRevisionId($downloadUri);
+
+            try {
+                \Log::info("   Convert " . $downloadUri . " from " . $downloadExt . " to " . $curExt);
+                $convertedUri;
+                $percent = $this->functions->GetConvertedUri($downloadUri, $downloadExt, $curExt, $key, FALSE, $convertedUri);
+                if (!empty($convertedUri)) {
+                    $downloadUri = $convertedUri;
+                } else {
+                    \Log::info("   Convert after save convertedUri is empty");
+                    $baseNameWithoutExt = substr($fileName, 0, strlen($fileName) - strlen($curExt));
+                    $newFileName = $this->functions->GetCorrectName($baseNameWithoutExt . $downloadExt, $userAddress);
+                }
+            } catch (Exception $e) {
+                \Log::error("   Convert after save ".$e->getMessage());
+                $baseNameWithoutExt = substr($fileName, 0, strlen($fileName) - strlen($curExt));
+                $newFileName = $this->functions->GetCorrectName($baseNameWithoutExt . $downloadExt, $userAddress);
+            }
+        }
+
+        $saved = 1;
+
+        $arrContextOptions = array(
+            "ssl" => array(
+                "verify_peer"=>false,
+                "verify_peer_name"=>false,
+            ),
+        );
+
+        if (!(($new_data = file_get_contents($downloadUri, false, stream_context_create($arrContextOptions))) === FALSE)) {
+            $storagePath = $this->functions->getStoragePath($newFileName, $userAddress);
+            $histDir = $this->functions->getHistoryDir($storagePath);
+            $verDir = $this->functions->getVersionDir($histDir, $this->functions->getFileVersion($histDir));
+
+            mkdir($verDir, 0777, true);
+
+            rename($this->functions->getStoragePath($fileName, $userAddress), $verDir . DIRECTORY_SEPARATOR . "prev" . $curExt);
+            file_put_contents($storagePath, $new_data, LOCK_EX);
+
+            if ($changesData = file_get_contents($data["changesurl"], false, stream_context_create($arrContextOptions))) {
+                file_put_contents($verDir . DIRECTORY_SEPARATOR . "diff.zip", $changesData, LOCK_EX);
+            }
+            $histData;
+            if (isset($data["changeshistory"]))
+                $histData = $data["changeshistory"];
+            if (empty($histData)) {
+                $histData = json_encode($data["history"], JSON_PRETTY_PRINT);
+            }
+            if (!empty($histData)) {
+                file_put_contents($verDir . DIRECTORY_SEPARATOR . "changes.json", $histData, LOCK_EX);
+            }
+            file_put_contents($verDir . DIRECTORY_SEPARATOR . "key.txt", $data["key"], LOCK_EX);
+
+            $forcesavePath = $this->functions->getForcesavePath($newFileName, $userAddress, false);
+            if ($forcesavePath != "") {
+                unlink($forcesavePath);
+            }
+
+            $saved = 0;
+        }
+
+        $result["error"] = $saved;
+
+        return $result;
+    }
+
+    public function processForceSave($data, $fileName, $userAddress) {
+        $downloadUri = $data["url"];
+
+        $curExt = strtolower('.' . pathinfo($fileName, PATHINFO_EXTENSION));
+        $downloadExt = strtolower('.' . pathinfo($downloadUri, PATHINFO_EXTENSION));
+        $newFileName = false;
+
+        if ($downloadExt != $curExt) {
+            $key = $this->functions->GenerateRevisionId($downloadUri);
+
+            try {
+                \Log::info("   Convert " . $downloadUri . " from " . $downloadExt . " to " . $curExt);
+                $convertedUri;
+                $percent = $this->functions->GetConvertedUri($downloadUri, $downloadExt, $curExt, $key, FALSE, $convertedUri);
+                if (!empty($convertedUri)) {
+                    $downloadUri = $convertedUri;
+                } else {
+                    \Log::info("   Convert after save convertedUri is empty");
+                    $newFileName = true;
+                }
+            } catch (Exception $e) {
+                \Log::error("   Convert after save ".$e->getMessage());
+                $newFileName = true;
+            }
+        }
+
+        $saved = 1;
+
+        if (!(($new_data = file_get_contents($downloadUri)) === FALSE)) {
+            $baseNameWithoutExt = substr($fileName, 0, strlen($fileName) - strlen($curExt));
+            $isSubmitForm = $data["forcesavetype"] == 3;
+
+            if ($isSubmitForm) {
+                if ($newFileName){
+                    $fileName = $this->functions->GetCorrectName($baseNameWithoutExt . "-form" . $downloadExt, $userAddress);
+                } else {
+                    $fileName = $this->functions->GetCorrectName($baseNameWithoutExt . "-form" . $curExt, $userAddress);
+                }
+                $forcesavePath = $this->functions->getStoragePath($fileName, $userAddress);
+            } else {
+                if ($newFileName){
+                    $fileName = $this->functions->GetCorrectName($baseNameWithoutExt . $downloadExt, $userAddress);
+                }
+                $forcesavePath = $this->functions->getForcesavePath($fileName, $userAddress, false);
+                if ($forcesavePath == "") {
+                    $forcesavePath = $this->functions->getForcesavePath($fileName, $userAddress, true);
+                }
+            }
+
+            file_put_contents($forcesavePath, $new_data, LOCK_EX);
+
+            if ($isSubmitForm) {
+                $user = $data["actions"][0]["userid"];
+                $this->functions->createMeta($fileName, $user, $userAddress);
+            }
+
+            $saved = 0;
+        }
+
+        $result["error"] = $saved;
+
+        return $result;
+    }
+
 }

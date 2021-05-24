@@ -4,6 +4,7 @@ namespace Modules\Office\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Http\Controllers\Users\Users;
+use App\Http\Requests\ApiRequest;
 use Illuminate\Contracts\Support\Renderable;
 use Illuminate\Http\Request;
 use App\Altrp\Model;
@@ -51,9 +52,10 @@ class OfficeController extends Controller
 
     public function editor(Request $request)
     {
-        $currentUser = Auth::user();
-        if (!$currentUser)
-            return redirect('/login');
+        //$currentUser = Auth::user();
+        //if (!$currentUser)
+          //$currentUser = 8;
+            //return redirect('/login');
 
         $data = $request->all();
 
@@ -63,7 +65,7 @@ class OfficeController extends Controller
             $filename = $this->functions->DoUpload($externalUrl);
         } else {
             if (isset($data["fileID"]) && $data["fileID"])
-                $filename = basename(trim(strip_tags($data["fileID"])));
+                $filename = basename($data["fileID"]);
         }
         if (isset($data["fileExt"]) && $data["fileExt"])
             $createExt = trim(strip_tags($data["fileExt"]));
@@ -81,11 +83,17 @@ class OfficeController extends Controller
         $docKey = $this->functions->getDocEditorKey($filename);
         $filetype = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
 
-        $uid = $currentUser->id;
-        $uname = $currentUser->name;
+        $uid = empty($_GET["user"]) ? Auth::user()->id : $_GET["user"];;
+
+        $uname = Auth::user()->name;
+        $ugroup = "group";
+        //$ugroup = "";
+        $reviewGroups = ["group"];
+        //$reviewGroups = '';
 
         $editorsMode = empty($data["action"]) ? "edit" : $data["action"];
         $canEdit = in_array(strtolower('.' . pathinfo($filename, PATHINFO_EXTENSION)), $this->config['DOC_SERV_EDITED']);
+        $submitForm = $canEdit && ($editorsMode == "edit" || $editorsMode == "fillForms");
         $mode = $canEdit && $editorsMode != "view" ? "edit" : "view";
 
         $option = [
@@ -97,8 +105,9 @@ class OfficeController extends Controller
                 "fileType" => $filetype,
                 "key" => $docKey,
                 "info" => [
-                    "author" => $currentUser->name,
-                    "created" => date('d.m.y')
+                    "owner" => Auth::user()->name,
+                    "uploaded" => date('d.m.y'),
+                    "favorite" => isset($_GET["user"]) ? $_GET["user"] == 1 : null
                 ],
                 "permissions" => [
                     "comment" => $editorsMode != "view" && $editorsMode != "fillForms" && $editorsMode != "embedded" && $editorsMode != "blockcontent",
@@ -107,7 +116,8 @@ class OfficeController extends Controller
                     "fillForms" => $editorsMode != "view" && $editorsMode != "comment" && $editorsMode != "embedded" && $editorsMode != "blockcontent",
                     "modifyFilter" => $editorsMode != "filter",
                     "modifyContentControl" => $editorsMode != "blockcontent",
-                    "review" => $editorsMode == "edit" || $editorsMode == "review"
+                    "review" => $editorsMode == "edit" || $editorsMode == "review",
+                    "reviewGroups" => $reviewGroups
                 ]
             ],
             "editorConfig" => [
@@ -117,7 +127,8 @@ class OfficeController extends Controller
                 "callbackUrl" => $this->getCallbackUrl($filename),
                 "user" => [
                     "id" => $uid,
-                    "name" => $uname
+                    "name" => $uname,
+                    "group" => $ugroup
                 ],
                 "embedded" => [
                     "saveUrl" => $fileuriUser,
@@ -128,28 +139,51 @@ class OfficeController extends Controller
                 "customization" => [
                     "about" => true,
                     "feedback" => true,
+                    "forcesave" => false,
+                    "submitForm" => $submitForm,
                     "goback" => [
-                        "url" => $this->functions->serverPath(),
+                        "url" => $this->functions->serverPath() . '/plugins/office/',
                     ]
                 ]
             ]
         ];
+
+        $dataInsertImage = [
+            "fileType" => "png",
+            "url" => $this->functions->serverPath(true) . "/css/images/logo.png"
+        ];
+
+        $dataCompareFile = [
+            "fileType" => "docx",
+            "url" => $this->functions->serverPath(true) . "/api/plugins/office/webeditor/?type=assets&name=new.docx"
+        ];
+
+        $dataMailMergeRecipients = [
+            "fileType" =>"csv",
+            "url" => $this->functions->serverPath(true) . "/api/plugins/office/webeditor/?type=csv"
+        ];
+
         if ($this->jwt->isJwtEnabled()) {
             $option["token"] = $this->jwt->jwtEncode($option);
+            $dataInsertImage["token"] = $this->jwt->jwtEncode($dataInsertImage);
+            $dataCompareFile["token"] = $this->jwt->jwtEncode($dataCompareFile);
+            $dataMailMergeRecipients["token"] = $this->jwt->jwtEncode($dataMailMergeRecipients);
         }
 
         $fileInfo = [
             'filename' => $filename,
             'filetype' => $filetype,
             'docKey' => $docKey,
-            'fileuri' => $fileuri
+            'fileuri' => $fileuri,
+            'filePath' => $this->functions->getStoragePath($filename),
         ];
+
 
         $out = $this->getHistory($filename, $filetype, $docKey, $fileuri);
 
         $config = $this->config;
 
-        return view('office::editor', compact('currentUser', 'config', 'fileInfo', 'option', 'out'));
+        return view('office::editor', compact( 'config', 'fileInfo', 'option', 'out', 'dataInsertImage', 'dataCompareFile', 'dataMailMergeRecipients'));
     }
 
     public function webeditor(Request $request) {
@@ -158,10 +192,12 @@ class OfficeController extends Controller
             1 => 'Editing',
             2 => 'MustSave',
             3 => 'Corrupted',
-            4 => 'Closed'
+            4 => 'Closed',
+            6 => 'MustForceSave',
+            7 => 'CorruptedForceSave'
         );
 
-        $data = $request->all();
+        //$data = $request->all();
 
         if (isset($_GET["type"]) && !empty($_GET["type"])) { //Checks if type value exists
             $response_array;
@@ -172,7 +208,7 @@ class OfficeController extends Controller
             $this->nocache_headers();
 
             //sendlog(serialize($_GET), "webedior-ajax.log");
-            \Log::error(serialize($_GET));
+            \Log::info(serialize($_GET));
 
             $type = trim(strip_tags($_GET["type"]));
 
@@ -182,6 +218,10 @@ class OfficeController extends Controller
                 case "upload":
                     $response_array = $editorAjax->upload($request);
                     $response_array['status'] = isset($response_array['error']) ? 'error' : 'success';
+                    die (json_encode($response_array));
+                case "download":
+                    $response_array = $editorAjax->download();
+                    $response_array['status'] = 'success';
                     die (json_encode($response_array));
                 case "convert":
                     $response_array = $editorAjax->convert($request);
@@ -195,6 +235,17 @@ class OfficeController extends Controller
                     $response_array = $editorAjax->delete($request);
                     $response_array['status'] = 'success';
                     die (json_encode($response_array));
+                case "assets":
+                    $response_array = $editorAjax->assets();
+                    $response_array['status'] = 'success';
+                    die (json_encode($response_array));
+                case "csv":
+                    $response_array = $editorAjax->csv();
+                    $response_array['status'] = 'success';
+                    die (json_encode($response_array));
+                case "files":
+                    $response_array = $editorAjax->files();
+                    die (json_encode($response_array));
                 default:
                     $response_array['status'] = 'error';
                     $response_array['error'] = '404 Method not found';
@@ -205,7 +256,7 @@ class OfficeController extends Controller
 
     protected function tryGetDefaultByType(Request $request, $createExt) {
         $data = $request->all();
-        $demoName = ((isset($data["sample"]) && $data["sample"]) ? "demo." : "new.") . $createExt;
+        $demoName = ((isset($data["sample"]) && $data["sample"]) ? "sample." : "new.") . $createExt;
         $demoFilename = $this->functions->GetCorrectName($demoName);
 
         if(!@copy(storage_path('app/public/docs') . DIRECTORY_SEPARATOR . "app_data" . DIRECTORY_SEPARATOR . $demoName, $this->functions->getStoragePath($demoFilename)))
@@ -222,7 +273,7 @@ class OfficeController extends Controller
 
     protected function getCallbackUrl($fileName) {
         return $this->functions->serverPath(TRUE)
-            . "/plugins/office/webeditor/"
+            . "/api/plugins/office/webeditor/"
             . "?type=track"
             . "&fileName=" . urlencode($fileName)
             . "&userAddress=" . $this->functions->getClientIp();
@@ -237,16 +288,16 @@ class OfficeController extends Controller
             $hist = [];
             $histData = [];
 
-            for ($i = 0; $i <= $curVer; $i++) {
+            for ($i = 1; $i <= $curVer; $i++) {
                 $obj = [];
                 $dataObj = [];
-                $verDir = $this->functions->getVersionDir($histDir, $i + 1);
+                $verDir = $this->functions->getVersionDir($histDir, $i);
 
                 $key = $i == $curVer ? $docKey : file_get_contents($verDir . DIRECTORY_SEPARATOR . "key.txt");
                 $obj["key"] = $key;
                 $obj["version"] = $i;
 
-                if ($i == 0) {
+                if ($i == 1) {
                     $createdInfo = file_get_contents($histDir . DIRECTORY_SEPARATOR . "createdInfo.json");
                     $json = json_decode($createdInfo, true);
 
@@ -263,8 +314,8 @@ class OfficeController extends Controller
                 $dataObj["url"] = $i == $curVer ? $fileuri : $this->functions->getVirtualPath(true) . str_replace("%5C", "/", rawurlencode($prevFileName));
                 $dataObj["version"] = $i;
 
-                if ($i > 0) {
-                    $changes = json_decode(file_get_contents($this->functions->getVersionDir($histDir, $i) . DIRECTORY_SEPARATOR . "changes.json"), true);
+                if ($i > 1) {
+                    $changes = json_decode(file_get_contents($this->functions->getVersionDir($histDir, $i - 1) . DIRECTORY_SEPARATOR . "changes.json"), true);
                     $change = $changes["changes"][0];
 
                     $obj["changes"] = $changes["changes"];
@@ -272,19 +323,23 @@ class OfficeController extends Controller
                     $obj["created"] = $change["created"];
                     $obj["user"] = $change["user"];
 
-                    $prev = $histData[$i -1];
+                    $prev = $histData[$i - 2];
                     $dataObj["previous"] = [
                         "key" => $prev["key"],
                         "url" => $prev["url"]
                     ];
-                    $changesUrl = $this->functions->getVersionDir($histDir, $i) . DIRECTORY_SEPARATOR . "diff.zip";
+                    $changesUrl = $this->functions->getVersionDir($histDir, $i - 1) . DIRECTORY_SEPARATOR . "diff.zip";
                     $changesUrl = substr($changesUrl, strlen($this->functions->getStoragePath("")));
 
                     $dataObj["changesUrl"] = $this->functions->getVirtualPath(true) . str_replace("%5C", "/", rawurlencode($changesUrl));
                 }
 
+                if ($this->jwt->isJwtEnabled()) {
+                    $dataObj["token"] = $this->jwt->jwtEncode($dataObj);
+                }
+
                 array_push($hist, $obj);
-                $histData[$i] = $dataObj;
+                $histData[$i - 1] = $dataObj;
             }
 
             $out = [];

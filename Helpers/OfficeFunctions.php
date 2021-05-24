@@ -4,6 +4,7 @@ namespace Modules\Office\Helpers;
 use Illuminate\Support\Facades\Auth;
 use Modules\Office\Helpers\JwtManager;
 
+
 class OfficeFunctions
 {
 
@@ -90,6 +91,7 @@ class OfficeFunctions
      */
     public function GenerateRevisionId($expected_key)
     {
+        //$expected_key = $expected_key . time();
         if (strlen($expected_key) > 20) $expected_key = crc32($expected_key);
         $key = preg_replace("[^0-9-.a-zA-Z_=]", "_", $expected_key);
         $key = substr($key, 0, min(array(strlen($key), 20)));
@@ -108,7 +110,7 @@ class OfficeFunctions
      *
      * @return Document request result of conversion
      */
-    public function SendRequestToConvertService($document_uri, $from_extension, $to_extension, $document_revision_id, $is_async)
+    public function SendRequestToConvertService($document_uri, $from_extension, $to_extension, $document_revision_id, $is_async, $filePass)
     {
         if (empty($from_extension)) {
             $path_parts = pathinfo($document_uri);
@@ -134,12 +136,14 @@ class OfficeFunctions
             "outputtype" => trim($to_extension, '.'),
             "filetype" => trim($from_extension, '.'),
             "title" => $title,
-            "key" => $document_revision_id
+            "key" => $document_revision_id,
+            "password" => $filePass
         ];
 
         $jwt = new JwtManager();
 
         $headerToken = "";
+        $jwtHeader = $this->config['DOC_SERV_JWT_HEADER'] == "" ? "Authorization" : $this->config['DOC_SERV_JWT_HEADER'];
         if ($jwt->isJwtEnabled()) {
             $headerToken = $jwt->jwtEncode(["payload" => $arr]);
             $arr["token"] = $jwt->jwtEncode($arr);
@@ -152,7 +156,7 @@ class OfficeFunctions
             'timeout' => $this->config['DOC_SERV_TIMEOUT'],
             'header' => "Content-type: application/json\r\n" .
                 "Accept: application/json\r\n" .
-                (empty($headerToken) ? "" : "Authorization: $headerToken\r\n"),
+                (empty($headerToken) ? "" : $jwtHeader.": Bearer $headerToken\r\n"),
             'content' => $data
         )
         );
@@ -184,10 +188,10 @@ class OfficeFunctions
      *
      * @return The percentage of completion of conversion
      */
-    function GetConvertedUri($document_uri, $from_extension, $to_extension, $document_revision_id, $is_async, &$converted_document_uri)
+    function GetConvertedUri($document_uri, $from_extension, $to_extension, $document_revision_id, $is_async, &$converted_document_uri, $filePass)
     {
         $converted_document_uri = "";
-        $responceFromConvertService = $this->SendRequestToConvertService($document_uri, $from_extension, $to_extension, $document_revision_id, $is_async);
+        $responceFromConvertService = $this->SendRequestToConvertService($document_uri, $from_extension, $to_extension, $document_revision_id, $is_async, $filePass);
         $json = json_decode($responceFromConvertService, true);
 
         $errorElement = $json["error"];
@@ -276,7 +280,7 @@ class OfficeFunctions
 
 
     public function getClientIp() {
-        /*
+
         $ipaddress =
             getenv('HTTP_CLIENT_IP')?:
                 getenv('HTTP_X_FORWARDED_FOR')?:
@@ -289,8 +293,8 @@ class OfficeFunctions
         $ipaddress = preg_replace("/[^0-9a-zA-Z.=]/", "_", $ipaddress);
 
         return $ipaddress;
-        */
-        return Auth::user()->id;
+
+        //return Auth::user()->id;
     }
 
     public function serverPath($forDocumentServer = NULL) {
@@ -308,8 +312,8 @@ class OfficeFunctions
             }
         }
         if (is_null($userAddress)) {
-            //$userAddress = $this->getClientIp();
-            $userAddress = Auth::user()->id;
+            $userAddress = $this->getClientIp();
+            //$userAddress = Auth::user()->id;
         }
         return preg_replace("[^0-9a-zA-Z.=]", '_', $userAddress);
     }
@@ -326,9 +330,9 @@ class OfficeFunctions
     public function getDocumentType($filename) {
         $ext = strtolower('.' . pathinfo($filename, PATHINFO_EXTENSION));
 
-        if (in_array($ext, $this->config['ExtsDocument'])) return "text";
-        if (in_array($ext, $this->config['ExtsSpreadsheet'])) return "spreadsheet";
-        if (in_array($ext, $this->config['ExtsPresentation'])) return "presentation";
+        if (in_array($ext, $this->config['ExtsDocument'])) return "word";
+        if (in_array($ext, $this->config['ExtsSpreadsheet'])) return "cell";
+        if (in_array($ext, $this->config['ExtsPresentation'])) return "slide";
         return "";
     }
 
@@ -339,31 +343,48 @@ class OfficeFunctions
     public function getStoragePath($fileName, $userAddress = NULL) {
         $storagePath = trim(str_replace(array('/','\\'), DIRECTORY_SEPARATOR, $this->config['STORAGE_PATH']), DIRECTORY_SEPARATOR);
         if (!file_exists(storage_path('app/public/docs')))
-            mkdir(storage_path('app/public/docs'));
+            mkdir(storage_path('app/public/docs'), 0777, true);
         $directory = storage_path('app/public/docs') . DIRECTORY_SEPARATOR . $storagePath;
         if ($storagePath != "")
         {
             $directory =  $directory  . DIRECTORY_SEPARATOR;
 
             if (!file_exists($directory) && !is_dir($directory)) {
-                mkdir($directory);
+                mkdir($directory, 0777, true);
             }
         }
 
         $directory = $directory . $this->getCurUserHostAddress($userAddress) . DIRECTORY_SEPARATOR;
 
         if (!file_exists($directory) && !is_dir($directory)) {
-            mkdir($directory);
+            mkdir($directory, 0777, true);
         }
         //sendlog("getStoragePath result: " . $directory . $fileName, "common.log");
-        \Log::info("getStoragePath result: " . $directory . $fileName);
-        return $directory . $fileName;
+        \Log::info("getStoragePath result: " . $directory . basename($fileName));
+        return $directory . basename($fileName);
+    }
+
+    public function getForcesavePath($fileName, $userAddress, $create) {
+        $storagePath = trim(str_replace(array('/','\\'), DIRECTORY_SEPARATOR, $this->config['STORAGE_PATH']), DIRECTORY_SEPARATOR);
+        $directory = storage_path('app/public/docs') . DIRECTORY_SEPARATOR . $storagePath . $this->getCurUserHostAddress($userAddress) . DIRECTORY_SEPARATOR;
+
+        if (!is_dir($directory)) return "";
+
+        $directory = $directory . $fileName . "-hist" . DIRECTORY_SEPARATOR;
+        if (!$create && !is_dir($directory))  return "";
+        if (!file_exists($directory))
+            mkdir($directory, 0777, true);
+
+        $directory = $directory . $fileName;
+        if (!$create && !file_exists($directory)) return "";
+
+        return $directory;
     }
 
     public function getHistoryDir($storagePath) {
         $directory = $storagePath . "-hist";
         if (!file_exists($directory) && !is_dir($directory)) {
-            mkdir($directory);
+            mkdir($directory, 0777, true);
         }
         return $directory;
     }
@@ -376,7 +397,7 @@ class OfficeFunctions
         if (!file_exists($histDir) || !is_dir($histDir)) return 0;
 
         $cdir = scandir($histDir);
-        $ver = 0;
+        $ver = 1;
         foreach($cdir as $key => $fileName) {
             if (!in_array($fileName,array(".", ".."))) {
                 if (is_dir($histDir . DIRECTORY_SEPARATOR . $fileName)) {
@@ -421,6 +442,7 @@ class OfficeFunctions
                         "fileUri" => $this->getVirtualPath($fileName) . $fileName,
                         "editUri" => "/plugins/office/editor/?fileID={$fileName}&user={$currentUser}",
                         "viewUri" => "/plugins/office/editor/?fileID={$fileName}&user={$currentUser}&action=view",
+                        "deleteUri" => "/plugins/office/webeditor/?type=delete&fileName={$fileName}",
                     );
                 }
             }
@@ -436,12 +458,12 @@ class OfficeFunctions
 
         $virtPath = $this->serverPath($forDocumentServer) . '/' . $storagePath . $this->getCurUserHostAddress() . '/';
         //sendlog("getVirtualPath virtPath: " . $virtPath, "common.log");
-        \Log::error("getVirtualPath virtPath: " . $virtPath);
+        \Log::info("getVirtualPath virtPath: " . $virtPath);
         return $virtPath;
     }
 
-    public function createMeta($fileName, $uid = "0") {
-        $histDir = $this->getHistoryDir($this->getStoragePath($fileName));
+    public function createMeta($fileName, $uid = "0", $userAddress = NULL) {
+        $histDir = $this->getHistoryDir($this->getStoragePath($fileName, $userAddress));
         $currentUser = Auth::user();
         $uid = $currentUser->id;
         $name = $currentUser->name;
@@ -459,18 +481,48 @@ class OfficeFunctions
         return $uri;
     }
 
+    public function getFileInfo($fileId){
+        $storedFiles = $this->getStoredFiles();
+        $result = array();
+        $resultID = array();
+
+        foreach ($storedFiles as $key => $value){
+            $result[$key] = (object) array(
+                "version" => $this->getFileVersion($this->getHistoryDir($this->getStoragePath($value->name))),
+                "id" => $this->getDocEditorKey($value->name),
+                "contentLength" => number_format( filesize($this->getStoragePath($value->name)) / 1024, 2 )." KB",
+                "pureContentLength" => filesize($this->getStoragePath($value->name)),
+                "title" => $value->name,
+                "updated" => date( DATE_ATOM, filemtime($this->getStoragePath($value->name))),
+            );
+            if ($fileId != null){
+                if ($fileId == $this->getDocEditorKey($value->name)){
+                    $resultID[count($resultID)] = $result[$key];
+                }
+            }
+        }
+
+        if ($fileId != null){
+            if (count($resultID) != 0) return $resultID;
+            else return "File not found";
+        }
+        else {
+            return $result;
+        }
+    }
+
     public function getFileExts() {
         return array_merge($this->config['DOC_SERV_VIEWD'], $this->config['DOC_SERV_EDITED'], $this->config['DOC_SERV_CONVERT']);
     }
 
-    public function GetCorrectName($fileName) {
+    public function GetCorrectName($fileName, $userAddress = NULL) {
         $path_parts = pathinfo($fileName);
 
-        $ext = $path_parts['extension'];
+        $ext = strtolower($path_parts['extension']);
         $name = $path_parts['basename'];
         $baseNameWithoutExt = substr($name, 0, strlen($name) - strlen($ext) - 1);
-
-        for ($i = 1; file_exists($this->getStoragePath($name)); $i++)
+        $name = $baseNameWithoutExt . "." . $ext;
+        for ($i = 1; file_exists($this->getStoragePath($name, $userAddress)); $i++)
         {
             $name = $baseNameWithoutExt . "(" . $i . ")." . $ext;
         }
@@ -482,6 +534,41 @@ class OfficeFunctions
         $stat = filemtime($this->getStoragePath($fileName));
         $key = $key . $stat;
         return $this->GenerateRevisionId($key);
+    }
+
+    public function commandRequest($method, $key){
+        $documentCommandUrl = $this->config['DOC_SERV_SITE_URL'].$this->config['DOC_SERV_COMMAND_URL'];
+
+        $arr = [
+            "c" => $method,
+            "key" => $key
+        ];
+
+        $headerToken = "";
+        $jwtHeader = $this->config['DOC_SERV_JWT_HEADER'] == "" ? "Authorization" : $this->config['DOC_SERV_JWT_HEADER'];
+        $jwt = new JwtManager();
+        if ($jwt->isJwtEnabled()) {
+            $headerToken = $jwt->jwtEncode([ "payload" => $arr ]);
+            $arr["token"] = $jwt->jwtEncode($arr);
+        }
+
+        $data = json_encode($arr);
+
+        $opts = array('http' => array(
+            'method'  => 'POST',
+            'header'=> "Content-type: application/json\r\n" .
+                (empty($headerToken) ? "" : $jwtHeader.": Bearer $headerToken\r\n"),
+            'content' => $data
+        ));
+
+        if (substr($documentCommandUrl, 0, strlen("https")) === "https") {
+            $opts['ssl'] = array( 'verify_peer'   => FALSE );
+        }
+
+        $context = stream_context_create($opts);
+        $response_data = file_get_contents($documentCommandUrl, FALSE, $context);
+
+        return $response_data;
     }
 
 }
